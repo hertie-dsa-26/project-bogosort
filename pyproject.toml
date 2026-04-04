@@ -1,5 +1,26 @@
+[project]
+name = "project-bogosort"
+version = "0.1.0"
+requires-python = ">=3.10"
+
+dependencies = [
+    # Core data
+    "pandas",
+    "numpy",
+    "scipy",
+    # Machine learning
+    "scikit-learn",
+    # NLP — sentiment analysis
+    "vaderSentiment",
+    # Visualisation
+    "matplotlib",
+]
+
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
 ]
 
+# BERT embeddings are optional — large download (~2GB), only needed if
+# BertTransformer is used. Install manually if needed:
+#   uv add torch transformers
