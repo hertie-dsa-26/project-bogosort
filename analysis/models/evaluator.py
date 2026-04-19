@@ -8,7 +8,9 @@ from sklearn.metrics import (
     precision_recall_curve,
     roc_auc_score,
     average_precision_score,
-    auc
+    auc,
+    ConfusionMatrixDisplay,
+    confusion_matrix
 )
 import numpy as np
 import matplotlib.pyplot as plt
