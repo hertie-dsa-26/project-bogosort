@@ -8,7 +8,9 @@ from sklearn.metrics import (
     precision_recall_curve,
     roc_auc_score,
     average_precision_score,
-    auc
+    auc,
+    ConfusionMatrixDisplay,
+    confusion_matrix
 )
 import numpy as np
 import matplotlib.pyplot as plt
@@ -73,7 +75,7 @@ def evaluate_classification(y_true, y_pred, y_score=None,name="Model", plot_curv
         })
 
         if plot_curves:
-            fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+            fig, axes = plt.subplots(1, 3, figsize=(17, 5))
 
             # ROC plot
             axes[0].plot(fpr, tpr, label=f"ROC AUC = {roc_auc:.4f}")
@@ -91,6 +93,16 @@ def evaluate_classification(y_true, y_pred, y_score=None,name="Model", plot_curv
             axes[1].set_ylabel("Precision")
             axes[1].legend(loc="lower left")
             axes[1].grid(alpha=0.3)
+            cm = confusion_matrix(y_true, y_pred)
+            axes[2].imshow(cm, interpolation='nearest', cmap='Blues')
+            axes[2].set_title(f"{name} - Confusion Matrix")
+            for i in range(2):
+                for j in range(2):
+                    axes[2].text(j, i, str(cm[i, j]), ha='center', va='center')
+            axes[2].set_xlabel('Predicted')
+            axes[2].set_ylabel('True')
+            axes[2].set_xticks([0, 1])
+            axes[2].set_yticks([0, 1])
 
             plt.tight_layout()
 
