@@ -1,3 +1,5 @@
+import os
+import sys
 from sklearn.metrics import (
     accuracy_score,
     f1_score,
@@ -8,19 +10,21 @@ from sklearn.metrics import (
     precision_recall_curve,
     roc_auc_score,
     average_precision_score,
-    auc
+    auc,
+    confusion_matrix
 )
 import numpy as np
 import matplotlib.pyplot as plt
 
-def evaluate_classification(y_true, y_pred, y_score=None,name="Model", plot_curves=True,
+
+def evaluate_classification(y_true, y_pred, y_score=None, name="Model", plot_curves=True,
     save_path="./analysis/models/model_outputs/{name}_evaluation.png"):
     print(f"\n===== {name} Evaluation =====")
 
-    acc = accuracy_score(y_true, y_pred)
-    f1 = f1_score(y_true, y_pred)
+    acc       = accuracy_score(y_true, y_pred)
+    f1        = f1_score(y_true, y_pred)
     precision = precision_score(y_true, y_pred, zero_division=0)
-    recall = recall_score(y_true, y_pred)
+    recall    = recall_score(y_true, y_pred)
 
     print(f"Accuracy : {acc:.4f}")
     print(f"F1-score : {f1:.4f}")
@@ -31,12 +35,19 @@ def evaluate_classification(y_true, y_pred, y_score=None,name="Model", plot_curv
     clf_report = classification_report(y_true, y_pred)
     print(clf_report)
 
+    cm = confusion_matrix(y_true, y_pred)
+    tn, fp, fn, tp = cm.ravel()
+    print(f"Confusion Matrix:")
+    print(f"  TP: {tp}  FP: {fp}")
+    print(f"  FN: {fn}  TN: {tn}")
+
     metrics = {
         "accuracy": acc,
         "f1": f1,
         "precision": precision,
         "recall": recall,
-        "classification_report": clf_report
+        "classification_report": clf_report,
+        "confusion_matrix": cm,
     }
 
     # ----- ROC / PR / AUC -----
@@ -49,8 +60,8 @@ def evaluate_classification(y_true, y_pred, y_score=None,name="Model", plot_curv
 
         # PR
         pr_precision, pr_recall, pr_thresholds = precision_recall_curve(y_true, y_score)
-        pr_auc_trapz = auc(pr_recall, pr_precision)              # area under PR curve via trapezoid
-        ap_score = average_precision_score(y_true, y_score)      # Average Precision (recommended PR summary)
+        pr_auc_trapz = auc(pr_recall, pr_precision)         # area under PR curve via trapezoid
+        ap_score = average_precision_score(y_true, y_score) # Average Precision (recommended PR summary)
 
         print(f"ROC-AUC  : {roc_auc:.4f}")
         print(f"PR-AUC   : {pr_auc_trapz:.4f}")
@@ -73,7 +84,7 @@ def evaluate_classification(y_true, y_pred, y_score=None,name="Model", plot_curv
         })
 
         if plot_curves:
-            fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+            fig, axes = plt.subplots(1, 3, figsize=(17, 5))
 
             # ROC plot
             axes[0].plot(fpr, tpr, label=f"ROC AUC = {roc_auc:.4f}")
@@ -92,11 +103,25 @@ def evaluate_classification(y_true, y_pred, y_score=None,name="Model", plot_curv
             axes[1].legend(loc="lower left")
             axes[1].grid(alpha=0.3)
 
+            # Confusion matrix plot
+            axes[2].imshow(cm, interpolation="nearest", cmap="Blues")
+            axes[2].set_title(f"{name} - Confusion Matrix")
+            labels = ["Non-toxic", "Toxic"]
+            axes[2].set_xticks([0, 1]); axes[2].set_xticklabels(labels)
+            axes[2].set_yticks([0, 1]); axes[2].set_yticklabels(labels)
+            axes[2].set_xlabel("Predicted")
+            axes[2].set_ylabel("True")
+            for i in range(2):
+                for j in range(2):
+                    axes[2].text(j, i, str(cm[i, j]), ha="center", va="center",
+                                 color="white" if cm[i, j] > cm.max() / 2 else "black",
+                                 fontsize=14)
+
             plt.tight_layout()
 
             if save_path:
                 plt.savefig(save_path, dpi=150, bbox_inches="tight")
-                print(f"Saved ROC/PR curves to: {save_path}")
+                print(f"Saved to: {save_path}")
 
             plt.show()
 
@@ -104,3 +129,61 @@ def evaluate_classification(y_true, y_pred, y_score=None,name="Model", plot_curv
         print("y_score not provided -> skipping ROC/PR/AUC computation.")
 
     return metrics
+
+
+# ── Runner ────────────────────────────────────────────────────────────────────
+# Run directly: python analysis/models/evaluator.py
+
+if __name__ == "__main__":
+    import pickle
+    import scipy.sparse as sp
+    from scipy.sparse import hstack
+
+    PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    os.chdir(PROJECT_ROOT)
+    sys.path.insert(0, PROJECT_ROOT)
+
+    from analysis.models.data_pipeline import DataPipeline
+    from analysis.features.build_features import DenseFeatureTransformer
+
+    OUTPUT_DIR = "analysis/models/model_outputs"
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Load model
+    with open("analysis/models/artifacts/best_model.pkl", "rb") as f:
+        bundle = pickle.load(f)
+    model        = bundle["model"]
+    scaler_dense = bundle["scaler_dense"]
+    scaler_bert  = bundle["scaler_bert"]
+    threshold    = bundle["threshold"]
+    model.decision_threshold = threshold
+
+    # Load data + reconstruct test features
+    dp = DataPipeline("data/processed/test_train_data.pkl", label_columns=["toxic"])
+    _, X_test_raw, _, y_test = dp.get_data()
+    y_test = y_test.values.ravel()
+
+    dense_transformer = DenseFeatureTransformer()
+    X_test_dense      = scaler_dense.transform(dense_transformer.transform(X_test_raw))
+    X_test_tfidf      = sp.load_npz("data/processed/tfidf_test.npz")
+    with open("data/processed/bert_test.pkl", "rb") as f:
+        X_test_bert = scaler_bert.transform(pickle.load(f))
+
+    X_test = hstack([
+        sp.csr_matrix(X_test_dense),
+        X_test_tfidf,
+        sp.csr_matrix(X_test_bert),
+    ]).tocsr()
+
+    # Evaluate
+    y_pred  = model.predict(X_test)
+    y_score = model.predict_proba(X_test)[:, 1]
+
+    evaluate_classification(
+        y_test, y_pred, y_score,
+        name="LassoLogisticRegression",
+        plot_curves=True,
+        save_path=os.path.join(OUTPUT_DIR, "test_evaluation.png"),
+    )
+
+    print(f"\nDecision threshold used: {threshold:.4f}")
