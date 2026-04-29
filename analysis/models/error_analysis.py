@@ -5,12 +5,18 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 os.chdir(PROJECT_ROOT)
 sys.path.insert(0, PROJECT_ROOT)
 
+import pickle
 import numpy as np
 import pandas as pd
+import scipy.sparse as sp
 import matplotlib.pyplot as plt
+from scipy.sparse import hstack
 from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import StratifiedKFold
+from sklearn.preprocessing import MinMaxScaler
 
-from analysis.models._load import load_bundle, load_val
+from analysis.models.data_pipeline import DataPipeline
+from analysis.features.build_features import DenseFeatureTransformer
 
 
 OUTPUT_DIR = "analysis/models/model_outputs"
@@ -19,12 +25,45 @@ N_SHOW     = 20
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ── Load ──────────────────────────────────────────────────────────────────────
 
-model, scaler_dense, scaler_bert, threshold = load_bundle()
+# ── Load model ────────────────────────────────────────────────────────────────
+
+with open("analysis/models/artifacts/best_model.pkl", "rb") as f:
+    bundle = pickle.load(f)
+model        = bundle["model"]
+scaler_dense = bundle["scaler_dense"]
+scaler_bert  = bundle["scaler_bert"]
+threshold    = bundle["threshold"]
 model.decision_threshold = threshold
 
-X_val, y_val, X_val_raw, _ = load_val(model, scaler_dense, scaler_bert)
+
+# ── Load data + reconstruct features ─────────────────────────────────────────
+
+dp = DataPipeline("data/processed/test_train_data.pkl", label_columns=["toxic"])
+X_train_raw, _, y_train_full, _ = dp.get_data()
+y_train_full = y_train_full.values.ravel()
+
+dense_transformer = DenseFeatureTransformer()
+X_train_dense     = scaler_dense.transform(dense_transformer.transform(X_train_raw))
+X_train_tfidf     = sp.load_npz("data/processed/tfidf_train.npz")
+with open("data/processed/bert_train.pkl", "rb") as f:
+    X_train_bert = scaler_bert.transform(pickle.load(f))
+
+X_train_proc = hstack([
+    sp.csr_matrix(X_train_dense),
+    X_train_tfidf,
+    sp.csr_matrix(X_train_bert),
+]).tocsr()
+
+
+# ── Reconstruct last CV fold val split ────────────────────────────────────────
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+_, last_val_idx = list(cv.split(X_train_proc, y_train_full))[-1]
+
+X_val     = X_train_proc[last_val_idx]
+y_val     = y_train_full[last_val_idx]
+X_val_raw = X_train_raw.iloc[last_val_idx].reset_index(drop=True)
 
 y_proba = model.predict_proba(X_val)[:, 1]
 y_pred  = model.predict(X_val)
@@ -65,7 +104,7 @@ def inspect_errors():
     fp_mask = (y_pred == 1) & (y_val == 0)
     fn_mask = (y_pred == 0) & (y_val == 1)
 
-    text_col = X_val_raw.columns[0]   # adjust if your raw text column has a specific name
+    text_col = X_val_raw.columns[0]   # << adjust if your raw text column has a specific name
 
     fp_df = pd.DataFrame({
         "text":  X_val_raw.loc[fp_mask, text_col].values,
@@ -97,11 +136,8 @@ def error_patterns_by_feature():
     fn_mask      = (y_pred == 0) & (y_val == 1)
     correct_mask = y_pred == y_val
 
-    top_idx   = np.argsort(np.abs(model.coef_))[::-1][:TOP_N]
-    X_dense   = np.asarray(X_val[:, top_idx].todense())
-
-    # Feature names: dense features come first, then tfidf, then bert
-    # Adjust if your preprocessor exposes get_feature_names_out()
+    top_idx       = np.argsort(np.abs(model.coef_))[::-1][:TOP_N]
+    X_dense       = np.asarray(X_val[:, top_idx].todense())
     feature_names = [f"feature_{i}" for i in top_idx]   # << replace with real names if available
 
     means = {

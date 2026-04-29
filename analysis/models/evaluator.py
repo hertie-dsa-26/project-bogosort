@@ -137,21 +137,45 @@ def evaluate_classification(y_true, y_pred, y_score=None, name="Model", plot_cur
 if __name__ == "__main__":
     import pickle
     import scipy.sparse as sp
+    from scipy.sparse import hstack
 
     PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     os.chdir(PROJECT_ROOT)
     sys.path.insert(0, PROJECT_ROOT)
 
-    from analysis.models._load import load_bundle, load_test
+    from analysis.models.data_pipeline import DataPipeline
+    from analysis.features.build_features import DenseFeatureTransformer
 
     OUTPUT_DIR = "analysis/models/model_outputs"
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    model, scaler_dense, scaler_bert, threshold = load_bundle()
+    # Load model
+    with open("analysis/models/artifacts/best_model.pkl", "rb") as f:
+        bundle = pickle.load(f)
+    model        = bundle["model"]
+    scaler_dense = bundle["scaler_dense"]
+    scaler_bert  = bundle["scaler_bert"]
+    threshold    = bundle["threshold"]
     model.decision_threshold = threshold
 
-    X_test, y_test = load_test(scaler_dense, scaler_bert)
+    # Load data + reconstruct test features
+    dp = DataPipeline("data/processed/test_train_data.pkl", label_columns=["toxic"])
+    _, X_test_raw, _, y_test = dp.get_data()
+    y_test = y_test.values.ravel()
 
+    dense_transformer = DenseFeatureTransformer()
+    X_test_dense      = scaler_dense.transform(dense_transformer.transform(X_test_raw))
+    X_test_tfidf      = sp.load_npz("data/processed/tfidf_test.npz")
+    with open("data/processed/bert_test.pkl", "rb") as f:
+        X_test_bert = scaler_bert.transform(pickle.load(f))
+
+    X_test = hstack([
+        sp.csr_matrix(X_test_dense),
+        X_test_tfidf,
+        sp.csr_matrix(X_test_bert),
+    ]).tocsr()
+
+    # Evaluate
     y_pred  = model.predict(X_test)
     y_score = model.predict_proba(X_test)[:, 1]
 

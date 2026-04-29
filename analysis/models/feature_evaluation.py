@@ -5,14 +5,19 @@ PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 os.chdir(PROJECT_ROOT)
 sys.path.insert(0, PROJECT_ROOT)
 
+import pickle
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 import matplotlib.pyplot as plt
-import shap
+# import shap
+from scipy.sparse import hstack
 from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import StratifiedKFold
+from sklearn.preprocessing import MinMaxScaler
 
-from analysis.models._load import load_bundle, load_val
+from analysis.models.data_pipeline import DataPipeline
+from analysis.features.build_features import DenseFeatureTransformer
 
 
 OUTPUT_DIR   = "analysis/models/model_outputs"
@@ -23,17 +28,47 @@ RANDOM_STATE = 42
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# ── Load ──────────────────────────────────────────────────────────────────────
 
-model, scaler_dense, scaler_bert, threshold = load_bundle()
+# ── Load model ────────────────────────────────────────────────────────────────
+
+with open("analysis/models/artifacts/best_model.pkl", "rb") as f:
+    bundle = pickle.load(f)
+model        = bundle["model"]
+scaler_dense = bundle["scaler_dense"]
+scaler_bert  = bundle["scaler_bert"]
+threshold    = bundle["threshold"]
 model.decision_threshold = threshold
 
-X_val, y_val, _, _ = load_val(model, scaler_dense, scaler_bert)
 
-# Feature names: dense + tfidf + bert blocks
-# << Replace with real names if your transformers expose get_feature_names_out()
+# ── Load data + reconstruct features ─────────────────────────────────────────
+
+dp = DataPipeline("data/processed/test_train_data.pkl", label_columns=["toxic"])
+X_train_raw, _, y_train_full, _ = dp.get_data()
+y_train_full = y_train_full.values.ravel()
+
+dense_transformer = DenseFeatureTransformer()
+X_train_dense     = scaler_dense.transform(dense_transformer.transform(X_train_raw))
+X_train_tfidf     = sp.load_npz("data/processed/tfidf_train.npz")
+with open("data/processed/bert_train.pkl", "rb") as f:
+    X_train_bert = scaler_bert.transform(pickle.load(f))
+
+X_train_proc = hstack([
+    sp.csr_matrix(X_train_dense),
+    X_train_tfidf,
+    sp.csr_matrix(X_train_bert),
+]).tocsr()
+
+
+# ── Reconstruct last CV fold val split ────────────────────────────────────────
+
+cv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+_, last_val_idx = list(cv.split(X_train_proc, y_train_full))[-1]
+
+X_val  = X_train_proc[last_val_idx]
+y_val  = y_train_full[last_val_idx]
+
 n_features    = X_val.shape[1]
-feature_names = [f"feature_{i}" for i in range(n_features)]
+feature_names = [f"feature_{i}" for i in range(n_features)]   # << replace with real names if available
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
