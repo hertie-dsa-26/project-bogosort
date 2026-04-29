@@ -19,9 +19,10 @@ from analysis.models.data_pipeline import DataPipeline
 from analysis.features.build_features import DenseFeatureTransformer
 
 
-OUTPUT_DIR = "analysis/models/model_outputs"
-TOP_N      = 20
-N_SHOW     = 20
+OUTPUT_DIR  = "analysis/models/model_outputs"
+TOP_N       = 20
+N_SHOW      = 20
+SAMPLE_SIZE = 2000   # rows used for error patterns — keeps it fast
 
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
@@ -65,54 +66,27 @@ X_val     = X_train_proc[last_val_idx]
 y_val     = y_train_full[last_val_idx]
 X_val_raw = X_train_raw.iloc[last_val_idx].reset_index(drop=True)
 
+# If X_val_raw is a DataFrame, extract the text column; if Series use directly
+if hasattr(X_val_raw, "columns"):
+    X_val_raw = X_val_raw.iloc[:, 0]
+
 y_proba = model.predict_proba(X_val)[:, 1]
 y_pred  = model.predict(X_val)
 
 
-# ── 1. Confusion matrix ───────────────────────────────────────────────────────
-
-def plot_confusion_matrix():
-    cm = confusion_matrix(y_val, y_pred)
-    fig, ax = plt.subplots(figsize=(5, 4))
-    im = ax.imshow(cm, cmap="Blues")
-    plt.colorbar(im, ax=ax)
-    labels = ["Non-toxic", "Toxic"]
-    ax.set_xticks([0, 1]); ax.set_xticklabels(labels)
-    ax.set_yticks([0, 1]); ax.set_yticklabels(labels)
-    ax.set_xlabel("Predicted"); ax.set_ylabel("True")
-    ax.set_title("Confusion Matrix (last CV fold val set)")
-    for i in range(2):
-        for j in range(2):
-            ax.text(j, i, str(cm[i, j]), ha="center", va="center",
-                    color="white" if cm[i, j] > cm.max() / 2 else "black", fontsize=14)
-    plt.tight_layout()
-    path = os.path.join(OUTPUT_DIR, "error_confusion_matrix.png")
-    plt.savefig(path, dpi=150, bbox_inches="tight")
-    plt.show()
-    print(f"Saved: {path}")
-
-    tn, fp, fn, tp = cm.ravel()
-    print(f"\n  True Positives  (correctly flagged toxic)    : {tp}")
-    print(f"  True Negatives  (correctly flagged non-toxic): {tn}")
-    print(f"  False Positives (wrongly flagged toxic)      : {fp}")
-    print(f"  False Negatives (missed toxic)               : {fn}")
-
-
-# ── 2. FP / FN samples ───────────────────────────────────────────────────────
+# ── 1. FP / FN samples ───────────────────────────────────────────────────────
 
 def inspect_errors():
     fp_mask = (y_pred == 1) & (y_val == 0)
     fn_mask = (y_pred == 0) & (y_val == 1)
 
-    text_col = X_val_raw.columns[0]   # << adjust if your raw text column has a specific name
-
     fp_df = pd.DataFrame({
-        "text":  X_val_raw.loc[fp_mask, text_col].values,
+        "text":  X_val_raw[fp_mask].values,
         "proba": y_proba[fp_mask],
     }).sort_values("proba", ascending=False).head(N_SHOW)
 
     fn_df = pd.DataFrame({
-        "text":  X_val_raw.loc[fn_mask, text_col].values,
+        "text":  X_val_raw[fn_mask].values,
         "proba": y_proba[fn_mask],
     }).sort_values("proba", ascending=True).head(N_SHOW)
 
@@ -129,15 +103,22 @@ def inspect_errors():
     print(f"\nSaved false_positives.csv and false_negatives.csv to {OUTPUT_DIR}/")
 
 
-# ── 3. Error patterns by feature value ───────────────────────────────────────
+# ── 2. Error patterns by feature value ───────────────────────────────────────
 
 def error_patterns_by_feature():
-    fp_mask      = (y_pred == 1) & (y_val == 0)
-    fn_mask      = (y_pred == 0) & (y_val == 1)
-    correct_mask = y_pred == y_val
+    # Subsample rows to keep todense() fast
+    rng        = np.random.default_rng(42)
+    row_idx    = rng.choice(X_val.shape[0], size=min(SAMPLE_SIZE, X_val.shape[0]), replace=False)
+    top_idx    = np.argsort(np.abs(model.coef_))[::-1][:TOP_N]
 
-    top_idx       = np.argsort(np.abs(model.coef_))[::-1][:TOP_N]
-    X_dense       = np.asarray(X_val[:, top_idx].todense())
+    X_dense      = np.asarray(X_val[row_idx][:, top_idx].todense())
+    y_pred_sub   = y_pred[row_idx]
+    y_val_sub    = y_val[row_idx]
+
+    fp_mask      = (y_pred_sub == 1) & (y_val_sub == 0)
+    fn_mask      = (y_pred_sub == 0) & (y_val_sub == 1)
+    correct_mask = y_pred_sub == y_val_sub
+
     feature_names = [f"feature_{i}" for i in top_idx]   # << replace with real names if available
 
     means = {
@@ -174,7 +155,7 @@ def error_patterns_by_feature():
     df.to_csv(os.path.join(OUTPUT_DIR, "error_patterns_by_feature.csv"))
 
 
-# ── 4. Confidence distribution ────────────────────────────────────────────────
+# ── 3. Confidence distribution ────────────────────────────────────────────────
 
 def plot_confidence_distribution():
     fp_mask = (y_pred == 1) & (y_val == 0)
@@ -208,16 +189,13 @@ def plot_confidence_distribution():
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
-print("── 1. Confusion matrix ──")
-plot_confusion_matrix()
-
-print("\n── 2. FP / FN samples ──")
+print("── 1. FP / FN samples ──")
 inspect_errors()
 
-print("\n── 3. Error patterns by feature ──")
+print("\n── 2. Error patterns by feature ──")
 error_patterns_by_feature()
 
-print("\n── 4. Confidence distribution ──")
+print("\n── 3. Confidence distribution ──")
 plot_confidence_distribution()
 
 print(f"\nAll outputs saved to {OUTPUT_DIR}/")
