@@ -6,7 +6,7 @@ from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.metrics import accuracy_score, f1_score, precision_score, recall_score
 from sklearn.model_selection import ParameterGrid, StratifiedKFold
 
-
+# Linear SVM model
 class ManualLinearSVM(BaseEstimator, ClassifierMixin):
     """Linear SVM (hinge loss) + L2."""
 
@@ -20,10 +20,11 @@ class ManualLinearSVM(BaseEstimator, ClassifierMixin):
     def _validate_binary_target(self, y):
         classes = np.unique(y)
         if classes.shape[0] != 2:
-            raise ValueError("ManualLinearSVM supports binary classification only.")
+            raise ValueError("SVM supports only binary classification")
         if not np.all(np.isin(classes, [0, 1])):
-            raise ValueError("Target labels must be in {0, 1}.")
+            raise ValueError("Target labels must be in scope of{0, 1}")
 
+# Fit model
     def fit(self, X, y):
         X = np.asarray(X, dtype=float)
         y = np.asarray(y)
@@ -75,7 +76,7 @@ class ManualLinearSVM(BaseEstimator, ClassifierMixin):
         y = np.asarray(y)
         return np.mean(self.predict(X) == y)
 
-
+# Load training matrix and drop columns
 def load_training_matrix(
     csv_path,
     target_col="toxic",
@@ -106,7 +107,7 @@ def load_training_matrix(
 
     return X, y, feature_cols
 
-
+# Run stratified Crossvalidation
 def run_stratified_kfold(
     X,
     y,
@@ -145,7 +146,7 @@ def run_stratified_kfold(
 
     return pd.DataFrame(fold_metrics)
 
-
+# Hyperparameter tuning
 def tune_hyperparameters(
     X,
     y,
@@ -230,7 +231,7 @@ def main():
     print("\nHyperparameter tuning (top 5 by mean_f1):")
     print(tuning_results.head(5).to_string(index=False))
 
-    print("\nBest configuration:")
+    print("\nBest config.:")
     print(pd.Series(best).to_string())
 
 
