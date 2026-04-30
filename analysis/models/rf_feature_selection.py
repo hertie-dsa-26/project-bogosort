@@ -1,4 +1,5 @@
 import os
+import sys
 import pickle
 import warnings
 warnings.filterwarnings("ignore")
@@ -10,7 +11,11 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import average_precision_score, f1_score, precision_recall_curve, roc_auc_score
 from sklearn.utils.class_weight import compute_sample_weight
 
-from analysis.models.data_pipeline import DataPipeline
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.chdir(PROJECT_ROOT)
+sys.path.insert(0, PROJECT_ROOT)
+
+from analysis.pipeline_and_dispatch.data_pipeline import DataPipeline
 from analysis.features.build_features import DenseFeatureTransformer
 
 
@@ -18,7 +23,7 @@ def run():
 
     # ── Load tuned model ──────────────────────────────────────────────────────
 
-    with open("./analysis/models/artifacts/random_forest_tuned.pkl", "rb") as f:
+    with open("analysis/models/all_outputs/random_forest/random_forest_tuned.pkl", "rb") as f:
         bundle = pickle.load(f)
 
     tuned_model       = bundle["model"]
@@ -27,7 +32,7 @@ def run():
 
     # ── Load data ─────────────────────────────────────────────────────────────
 
-    dp = DataPipeline("./data/processed/test_train_data.pkl", label_columns=["toxic"])
+    dp = DataPipeline("data/processed/test_train_data.pkl", label_columns=["toxic"])
     X_train, X_test, y_train, y_test = dp.get_data()
 
     y_train = y_train.values.ravel()
@@ -121,9 +126,9 @@ def run():
         print(f"  Threshold: {threshold:.4f}")
 
         # save predictions
-        os.makedirs(f"./analysis/models/model_outputs/random_forest/predictions", exist_ok=True)
+        os.makedirs("analysis/models/all_outputs/random_forest/predictions", exist_ok=True)
         pd.DataFrame({"true": y_test, "pred": y_pred_test}).to_csv(
-            f"./analysis/models/model_outputs/random_forest/predictions/rf_{label}_predictions.csv",
+            f"analysis/models/all_outputs/random_forest/predictions/rf_{label}_predictions.csv",
             index=False,
         )
 
@@ -158,9 +163,9 @@ def run():
     best_label = max(results, key=lambda k: results[k]["pr_auc"])
     best       = results[best_label]
 
-    os.makedirs("./analysis/models/artifacts", exist_ok=True)
+    os.makedirs("analysis/models/all_outputs/random_forest", exist_ok=True)
 
-    with open("./analysis/models/artifacts/random_forest_selected.pkl", "wb") as f:
+    with open("analysis/models/all_outputs/random_forest/random_forest_selected.pkl", "wb") as f:
         pickle.dump({
             "model":             best["model"],
             "dense_transformer": dense_transformer,
@@ -169,7 +174,7 @@ def run():
         }, f)
 
     print(f"\nBest feature-selected model: {best_label} ({len(best['features'])} features)")
-    print("Saved random_forest_selected.pkl to artifacts/")
+    print("Saved random_forest_selected.pkl to analysis/models/all_outputs/random_forest/")
 
 
 if __name__ == "__main__":
