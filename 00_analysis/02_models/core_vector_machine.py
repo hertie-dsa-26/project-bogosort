@@ -76,6 +76,23 @@ class ManualLinearSVM(BaseEstimator, ClassifierMixin):
         y = np.asarray(y)
         return np.mean(self.predict(X) == y)
 
+
+# Best Threshold search on validation scores
+def find_best_threshold(y_true, scores, thresholds=None):
+    if thresholds is None:
+        thresholds = np.linspace(-1.0, 1.0, 81)
+
+    best_threshold = 0.0
+    best_f1 = -1.0
+    for thr in thresholds:
+        y_pred = (scores >= thr).astype(int)
+        curr_f1 = f1_score(y_true, y_pred, zero_division=0)
+        if curr_f1 > best_f1:
+            best_f1 = curr_f1
+            best_threshold = float(thr)
+
+    return best_threshold, float(best_f1)
+
 # Load training matrix and drop columns
 def load_training_matrix(
     csv_path,
@@ -117,6 +134,8 @@ def run_stratified_kfold(
     max_iter=2000,
     tol=1e-5,
     random_state=42,
+    use_fixed_threshold=True,
+    fixed_threshold=-0.595,
 ):
     kfold = StratifiedKFold(n_splits=n_splits, shuffle=True, random_state=random_state)
 
@@ -134,13 +153,22 @@ def run_stratified_kfold(
         )
         model.fit(X_train, y_train)
 
-        y_pred = model.predict(X_val)
+        val_scores = model.decision_function(X_val)
+        if use_fixed_threshold:
+            # Use threshold from prior tuning for stable final runs.
+            best_thr = float(fixed_threshold)
+        else:
+            # Recompute best threshold on each validation fold.
+            best_thr, _ = find_best_threshold(y_true=y_val, scores=val_scores)
+        y_pred = (val_scores >= best_thr).astype(int)
+
         metrics = {
             "fold": fold_idx,
             "accuracy": accuracy_score(y_val, y_pred),
             "precision": precision_score(y_val, y_pred, zero_division=0),
             "recall": recall_score(y_val, y_pred, zero_division=0),
             "f1": f1_score(y_val, y_pred, zero_division=0),
+            "threshold": best_thr,
         }
         fold_metrics.append(metrics)
 
@@ -153,6 +181,8 @@ def tune_hyperparameters(
     param_grid=None,
     n_splits=5,
     random_state=42,
+    use_fixed_threshold=True,
+    fixed_threshold=-0.595,
 ):
     if param_grid is None:
         param_grid = {
@@ -173,6 +203,8 @@ def tune_hyperparameters(
             max_iter=params["max_iter"],
             tol=params["tol"],
             random_state=random_state,
+            use_fixed_threshold=use_fixed_threshold,
+            fixed_threshold=fixed_threshold,
         )
         mean_metrics = fold_df[["accuracy", "precision", "recall", "f1"]].mean()
         search_rows.append({
@@ -184,6 +216,7 @@ def tune_hyperparameters(
             "mean_precision": float(mean_metrics["precision"]),
             "mean_recall": float(mean_metrics["recall"]),
             "mean_f1": float(mean_metrics["f1"]),
+            "mean_threshold": float(fold_df["threshold"].mean()),
         })
 
     search_df = pd.DataFrame(search_rows).sort_values(
@@ -202,7 +235,10 @@ def main():
     X, y, feature_cols = load_training_matrix(default_data_path, target_col="toxic")
     print(f"Loaded matrix: X={X.shape}, y={y.shape}, features={len(feature_cols)}")
 
-    #Run baseline 5-fold 
+    # Toggle between fixed threshold and per-fold threshold search.
+    use_fixed_threshold = True
+    # Fixed threshold chosen from prior tuning.
+    final_threshold = -0.595
     results = run_stratified_kfold(
         X,
         y,
@@ -212,13 +248,16 @@ def main():
         max_iter=2000,
         tol=1e-5,
         random_state=42,
+        use_fixed_threshold=use_fixed_threshold,
+        fixed_threshold=final_threshold,
     )
 
-    print("\nFold metrics:")
+    print("\nFold metrics (fixed threshold):")
     print(results.to_string(index=False))
 
-    print("\nMean metrics:")
+    print("\nMean metrics (fixed threshold):")
     print(results[["accuracy", "precision", "recall", "f1"]].mean().to_string())
+    print(f"Fixed threshold used in all folds: {final_threshold:.4f}")
 
     # Hyperparameter tuning with 5-fold CV
     tuning_results, best = tune_hyperparameters(
@@ -226,6 +265,8 @@ def main():
         y,
         n_splits=5,
         random_state=42,
+        use_fixed_threshold=use_fixed_threshold,
+        fixed_threshold=final_threshold,
     )
 
     print("\nHyperparameter tuning (top 5 by mean_f1):")
