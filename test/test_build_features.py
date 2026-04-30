@@ -2,7 +2,7 @@
 Tests for build_features.py — unit and integration level.
 
 Run with:
-    uv run pytest tests/test_build_features.py -v
+    uv run pytest test/test_build_features.py -v
 """
 
 import sys
@@ -12,9 +12,10 @@ import numpy as np
 import pandas as pd
 import pytest
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "00_analysis", "01_features"))
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, PROJECT_ROOT)
 
-from build_features import (
+from analysis.features.build_features import (
     DenseFeatureTransformer,
     TfidfTransformer,
     _avg_sentence_length,

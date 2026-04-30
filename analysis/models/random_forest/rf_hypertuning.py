@@ -1,4 +1,10 @@
 import os
+import sys
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+os.chdir(PROJECT_ROOT)
+sys.path.insert(0, PROJECT_ROOT)
+
 import pickle
 import warnings
 warnings.filterwarnings("ignore")
@@ -10,15 +16,18 @@ from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import average_precision_score, f1_score, precision_recall_curve, roc_auc_score
 from sklearn.utils.class_weight import compute_sample_weight
 
-from analysis.models.data_pipeline import DataPipeline
+from analysis.pipeline_and_dispatch.data_pipeline import DataPipeline
 from analysis.features.build_features import DenseFeatureTransformer
+
+
+OUTPUT_DIR = "analysis/models/all_outputs/random_forest"
 
 
 def run():
 
     # ── Load data ─────────────────────────────────────────────────────────────
 
-    dp = DataPipeline("./data/processed/test_train_data.pkl", label_columns=["toxic"])
+    dp = DataPipeline("data/processed/test_train_data.pkl", label_columns=["toxic"])
     X_train, X_test, y_train, y_test = dp.get_data()
 
     y_train = y_train.values.ravel()
@@ -169,18 +178,18 @@ def run():
 
     # ── Save ──────────────────────────────────────────────────────────────────
 
-    os.makedirs("./analysis/models/artifacts", exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    results_df.to_csv("./analysis/models/artifacts/rf_tuning_results.csv", index=False)
+    results_df.to_csv(os.path.join(OUTPUT_DIR, "random_forest_tuning_results.csv"), index=False)
 
-    with open("./analysis/models/artifacts/random_forest_tuned.pkl", "wb") as f:
+    with open(os.path.join(OUTPUT_DIR, "random_forest_tuned.pkl"), "wb") as f:
         pickle.dump({
             "model":             final_rf,
             "dense_transformer": dense_transformer,
             "threshold":         best_threshold,
         }, f)
 
-    print("\nSaved rf_tuning_results.csv and random_forest_tuned.pkl to artifacts/")
+    print(f"\nSaved random_forest_tuning_results.csv and random_forest_tuned.pkl to {OUTPUT_DIR}/")
 
 
 if __name__ == "__main__":

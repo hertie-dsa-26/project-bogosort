@@ -1,4 +1,10 @@
 import os
+import sys
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+os.chdir(PROJECT_ROOT)
+sys.path.insert(0, PROJECT_ROOT)
+
 import pickle
 import warnings
 warnings.filterwarnings("ignore")
@@ -9,17 +15,23 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import average_precision_score, f1_score, classification_report, roc_auc_score
 from sklearn.utils.class_weight import compute_sample_weight
 
-from analysis.models.data_pipeline import DataPipeline
+from analysis.pipeline_and_dispatch.data_pipeline import DataPipeline
 from analysis.features.build_features import DenseFeatureTransformer
-from analysis.models.evaluator import evaluate_classification
+from analysis.evaluation_code.evaluator import evaluate_classification
+
+
+OUTPUT_DIR = "analysis/models/all_outputs/random_forest"
 
 
 def run_baseline():
     """Trains and evaluates a baseline Random Forest on dense features."""
 
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(os.path.join(OUTPUT_DIR, "predictions"), exist_ok=True)
+
     # ── Load data ─────────────────────────────────────────────────────────────
 
-    dp = DataPipeline("./data/processed/test_train_data.pkl", label_columns=["toxic"])
+    dp = DataPipeline("data/processed/test_train_data.pkl", label_columns=["toxic"])
     X_train, X_test, y_train, y_test = dp.get_data()
 
     y_train = y_train.values.ravel()
@@ -73,7 +85,7 @@ def run_baseline():
         y_test, y_pred, y_proba,
         name="random_forest_baseline",
         plot_curves=True,
-        save_path="./analysis/models/model_outputs/random_forest_baseline_evaluation.png",
+        save_path=os.path.join(OUTPUT_DIR, "random_forest_baseline_evaluation.png"),
     )
 
     # ── Feature importance ────────────────────────────────────────────────────
@@ -90,38 +102,34 @@ def run_baseline():
 
     # ── Save ──────────────────────────────────────────────────────────────────
 
-    os.makedirs("./analysis/models/artifacts", exist_ok=True)
-    os.makedirs("./analysis/models/model_outputs/random_forest/predictions", exist_ok=True)
-
     pd.DataFrame({"true": y_test, "pred": y_pred}).to_csv(
-        "./analysis/models/model_outputs/random_forest/predictions/rf_baseline_predictions.csv",
+        os.path.join(OUTPUT_DIR, "predictions", "rf_baseline_predictions.csv"),
         index=False,
     )
 
-    with open("./analysis/models/artifacts/random_forest_baseline.pkl", "wb") as f:
+    with open(os.path.join(OUTPUT_DIR, "random_forest_baseline.pkl"), "wb") as f:
         pickle.dump({
             "model":             model,
             "dense_transformer": dense_transformer,
         }, f)
 
-    print("\nSaved rf_baseline_predictions.csv and random_forest_baseline.pkl to artifacts/")
+    print(f"\nSaved rf_baseline_predictions.csv and random_forest_baseline.pkl to {OUTPUT_DIR}/")
 
 
 def run_tuned():
     """Loads the tuned Random Forest and runs full evaluation."""
 
-    OUTPUT_DIR = "./analysis/models/model_outputs"
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # load tuned model
-    with open("./analysis/models/artifacts/random_forest_tuned.pkl", "rb") as f:
+    with open(os.path.join(OUTPUT_DIR, "random_forest_tuned.pkl"), "rb") as f:
         bundle = pickle.load(f)
     model             = bundle["model"]
     dense_transformer = bundle["dense_transformer"]
     threshold         = bundle["threshold"]
 
     # load data
-    dp = DataPipeline("./data/processed/test_train_data.pkl", label_columns=["toxic"])
+    dp = DataPipeline("data/processed/test_train_data.pkl", label_columns=["toxic"])
     _, X_test_raw, _, y_test = dp.get_data()
     y_test = y_test.values.ravel()
 
@@ -144,7 +152,6 @@ def run_tuned():
 
 
 if __name__ == "__main__":
-    import sys
     # pass "tuned" as argument to run tuned eval, otherwise runs baseline
     if len(sys.argv) > 1 and sys.argv[1] == "tuned":
         run_tuned()

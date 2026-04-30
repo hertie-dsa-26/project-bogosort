@@ -18,7 +18,7 @@ import matplotlib.pyplot as plt
 
 
 def evaluate_classification(y_true, y_pred, y_score=None, name="Model", plot_curves=True,
-    save_path="./analysis/models/model_outputs/{name}_evaluation.png"):
+    save_path=None):
     print(f"\n===== {name} Evaluation =====")
 
     acc       = accuracy_score(y_true, y_pred)
@@ -143,14 +143,14 @@ if __name__ == "__main__":
     os.chdir(PROJECT_ROOT)
     sys.path.insert(0, PROJECT_ROOT)
 
-    from analysis.models.data_pipeline import DataPipeline
+    from analysis.pipeline_and_dispatch.data_pipeline import DataPipeline
     from analysis.features.build_features import DenseFeatureTransformer
 
-    OUTPUT_DIR = "analysis/models/model_outputs"
+    OUTPUT_DIR = "analysis/models/all_outputs/lasso_log_reg"
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Load model
-    with open("analysis/models/artifacts/best_model.pkl", "rb") as f:
+    with open(os.path.join(OUTPUT_DIR, "lasso_log_reg_tuned.pkl"), "rb") as f:
         bundle = pickle.load(f)
     model        = bundle["model"]
     scaler_dense = bundle["scaler_dense"]
@@ -183,7 +183,7 @@ if __name__ == "__main__":
         y_test, y_pred, y_score,
         name="LassoLogisticRegression",
         plot_curves=True,
-        save_path=os.path.join(OUTPUT_DIR, "test_evaluation.png"),
+        save_path=os.path.join(OUTPUT_DIR, "lasso_log_reg_tuned_evaluation.png"),
     )
 
     print(f"\nDecision threshold used: {threshold:.4f}")

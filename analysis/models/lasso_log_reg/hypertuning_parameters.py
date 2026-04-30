@@ -1,4 +1,10 @@
 import os
+import sys
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+os.chdir(PROJECT_ROOT)
+sys.path.insert(0, PROJECT_ROOT)
+
 import pickle
 import warnings
 warnings.filterwarnings("ignore")
@@ -12,19 +18,20 @@ from sklearn.metrics import average_precision_score, f1_score, precision_recall_
 from sklearn.utils.class_weight import compute_sample_weight
 from sklearn.preprocessing import MinMaxScaler
 
-from analysis.models.core_logistic_regression_lasso import LassoLogisticRegression
-from analysis.models.data_pipeline import DataPipeline
+from analysis.models.lasso_log_reg.core_logistic_regression_lasso import LassoLogisticRegression
+from analysis.pipeline_and_dispatch.data_pipeline import DataPipeline
 from analysis.features.build_features import DenseFeatureTransformer
 
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 
-PROCESSED_DIR = "./data/processed"
+PROCESSED_DIR = "data/processed"
+OUTPUT_DIR    = "analysis/models/all_outputs/lasso_log_reg"
 
 
 # ── Load data ─────────────────────────────────────────────────────────────────
 
-dp = DataPipeline("./data/processed/test_train_data.pkl", label_columns=["toxic"])
+dp = DataPipeline("data/processed/test_train_data.pkl", label_columns=["toxic"])
 X_train, X_test, y_train, y_test = dp.get_data()
 
 y_train = y_train.values.ravel()
@@ -198,11 +205,11 @@ print(f"  Macro-F1: {macro_f1:.4f}")
 
 # ── Save ──────────────────────────────────────────────────────────────────────
 
-os.makedirs("./analysis/models/artifacts", exist_ok=True)
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-results_df.to_csv("./analysis/models/artifacts/tuning_results.csv", index=False)
+results_df.to_csv(os.path.join(OUTPUT_DIR, "lasso_tuning_results.csv"), index=False)
 
-with open("./analysis/models/artifacts/best_model.pkl", "wb") as f:
+with open(os.path.join(OUTPUT_DIR, "lasso_log_reg_tuned.pkl"), "wb") as f:
     pickle.dump({
         "model":        final_lasso,
         "scaler_dense": scaler_dense,
@@ -210,4 +217,4 @@ with open("./analysis/models/artifacts/best_model.pkl", "wb") as f:
         "threshold":    best_threshold,
     }, f)
 
-print("\nSaved tuning_results.csv and best_model.pkl to artifacts/")
+print(f"\nSaved lasso_tuning_results.csv and lasso_log_reg_tuned.pkl to {OUTPUT_DIR}/")

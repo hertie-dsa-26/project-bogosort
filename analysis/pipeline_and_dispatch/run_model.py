@@ -2,8 +2,8 @@ import argparse
 import importlib
 
 MODEL_REGISTRY = {
-    "baseline": "analysis.models.baseline_model",
-    "lasso": "analysis.models.lasso"
+    "baseline": "analysis.models.baseline.baseline_model",
+    "lasso":    "analysis.models.lasso_log_reg.lasso",
 }
 
 def model_run(model_name, data_path, mode, save_predictions, save_model):

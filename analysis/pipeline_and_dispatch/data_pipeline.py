@@ -6,9 +6,9 @@ from sklearn.model_selection import train_test_split
 class DataPipeline:
     def __init__(
         self,
-        data_path="./data/processed/train_data.pkl",
-        test_data_path="./data/processed/test_data.pkl",
-        processed_path="./data/processed/test_train_data.pkl",
+        data_path="data/processed/train_data.pkl",
+        test_data_path="data/processed/test_data.pkl",
+        processed_path="data/processed/test_train_data.pkl",
         text_column="comment_text",
         label_columns=None
     ):
@@ -37,7 +37,7 @@ class DataPipeline:
         self.y_train = data["y_train"]
         self.y_test = data["y_test"]
 
-    def _load_raw(self, data_path='./data/raw/jigsaw-dataset/train.csv'):
+    def _load_raw(self, data_path='data/raw/jigsaw-dataset/train.csv'):
         df = pd.read_csv(data_path)
 
         null_counts = df[[self.text_column] + self.label_columns].isnull().sum()

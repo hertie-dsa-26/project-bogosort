@@ -15,11 +15,12 @@ from sklearn.metrics import confusion_matrix
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
 
-from analysis.models.data_pipeline import DataPipeline
+from analysis.pipeline_and_dispatch.data_pipeline import DataPipeline
 from analysis.features.build_features import DenseFeatureTransformer
 
 
-OUTPUT_DIR  = "analysis/models/model_outputs"
+MODEL_PATH  = "analysis/models/all_outputs/lasso_log_reg/lasso_log_reg_tuned.pkl"
+OUTPUT_DIR  = "analysis/models/all_outputs/lasso_log_reg"
 TOP_N       = 20
 N_SHOW      = 20
 SAMPLE_SIZE = 2000   # rows used for error patterns — keeps it fast
@@ -29,7 +30,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ── Load model ────────────────────────────────────────────────────────────────
 
-with open("analysis/models/artifacts/best_model.pkl", "rb") as f:
+with open(MODEL_PATH, "rb") as f:
     bundle = pickle.load(f)
 model        = bundle["model"]
 scaler_dense = bundle["scaler_dense"]
@@ -66,7 +67,6 @@ X_val     = X_train_proc[last_val_idx]
 y_val     = y_train_full[last_val_idx]
 X_val_raw = X_train_raw.iloc[last_val_idx].reset_index(drop=True)
 
-# If X_val_raw is a DataFrame, extract the text column; if Series use directly
 if hasattr(X_val_raw, "columns"):
     X_val_raw = X_val_raw.iloc[:, 0]
 
@@ -106,7 +106,6 @@ def inspect_errors():
 # ── 2. Error patterns by feature value ───────────────────────────────────────
 
 def error_patterns_by_feature():
-    # Subsample rows to keep todense() fast
     rng        = np.random.default_rng(42)
     row_idx    = rng.choice(X_val.shape[0], size=min(SAMPLE_SIZE, X_val.shape[0]), replace=False)
     top_idx    = np.argsort(np.abs(model.coef_))[::-1][:TOP_N]
@@ -119,7 +118,7 @@ def error_patterns_by_feature():
     fn_mask      = (y_pred_sub == 0) & (y_val_sub == 1)
     correct_mask = y_pred_sub == y_val_sub
 
-    feature_names = [f"feature_{i}" for i in top_idx]   # << replace with real names if available
+    feature_names = [f"feature_{i}" for i in top_idx]
 
     means = {
         "correct":        X_dense[correct_mask].mean(axis=0),

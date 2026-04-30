@@ -1,17 +1,21 @@
 """
 Quick sanity check for build_features.py.
-Run with: uv run python 00_analysis/03_orchestration/sanity_check.py
+Run with: uv run python analysis/features/sanity_check.py
 """
 
+import os
 import sys
 import time
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-sys.path.insert(0, "00_analysis/03_orchestration")
-from build_features import DenseFeatureTransformer, TfidfTransformer
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+os.chdir(PROJECT_ROOT)
+sys.path.insert(0, PROJECT_ROOT)
 
-DATA_PATH = "01_data/00_raw/jigsaw-dataset/train.csv/train.csv"
+from analysis.features.build_features import DenseFeatureTransformer, TfidfTransformer
+
+DATA_PATH = "data/raw/jigsaw-dataset/train.csv"
 
 # ---------------------------------------------------------------------------
 # Load a small sample

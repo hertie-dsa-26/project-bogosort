@@ -16,11 +16,12 @@ from sklearn.metrics import roc_auc_score
 from sklearn.model_selection import StratifiedKFold
 from sklearn.preprocessing import MinMaxScaler
 
-from analysis.models.data_pipeline import DataPipeline
+from analysis.pipeline_and_dispatch.data_pipeline import DataPipeline
 from analysis.features.build_features import DenseFeatureTransformer
 
 
-OUTPUT_DIR   = "analysis/models/model_outputs"
+MODEL_PATH   = "analysis/models/all_outputs/lasso_log_reg/lasso_log_reg_tuned.pkl"
+OUTPUT_DIR   = "analysis/models/all_outputs/lasso_log_reg"
 TOP_N        = 20
 N_REPEATS    = 30
 SHAP_N       = 1000
@@ -31,7 +32,7 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 # ── Load model ────────────────────────────────────────────────────────────────
 
-with open("analysis/models/artifacts/best_model.pkl", "rb") as f:
+with open(MODEL_PATH, "rb") as f:
     bundle = pickle.load(f)
 model        = bundle["model"]
 scaler_dense = bundle["scaler_dense"]

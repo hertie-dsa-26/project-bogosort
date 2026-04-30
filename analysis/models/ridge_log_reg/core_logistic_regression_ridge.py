@@ -19,13 +19,19 @@
 # We do NOT split it again — we train on all of it.
 # ============================================================
 
+import os
+import sys
+
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+os.chdir(PROJECT_ROOT)
+sys.path.insert(0, PROJECT_ROOT)
+
 import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score, f1_score
 import joblib
-import os
 
 
 # ============================================================
@@ -161,7 +167,7 @@ class RidgeLogisticRegression(BaseEstimator, ClassifierMixin):
 
 print("Loading training data...")
 
-data = pd.read_csv("01_data/01_processed/train_set_with_features.csv")
+data = pd.read_csv("data/processed/train_set_with_features.csv")
 
 print(f"Training set: {data.shape[0]} comments, {data.shape[1]} columns")
 
@@ -229,12 +235,12 @@ print("\n" + "=" * 60)
 print("SAVING MODEL")
 print("=" * 60)
 
-output_dir = "00_analysis/02_models/ridge_outputs"
+output_dir = "analysis/models/all_outputs/ridge_log_reg"
 os.makedirs(output_dir, exist_ok=True)
 
 # Save the trained model and scaler as .pkl files
-joblib.dump(model, f"{output_dir}/ridge_model.pkl")
-joblib.dump(scaler, f"{output_dir}/ridge_scaler.pkl")
+joblib.dump(model, os.path.join(output_dir, "ridge_model.pkl"))
+joblib.dump(scaler, os.path.join(output_dir, "ridge_scaler.pkl"))
 print(f"Saved ridge_model.pkl and ridge_scaler.pkl to {output_dir}/")
 
 print("\n" + "=" * 60)
