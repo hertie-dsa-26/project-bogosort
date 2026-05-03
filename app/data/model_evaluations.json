@@ -1,0 +1,113 @@
+{
+  "models": [
+    {
+      "model_id": "toxicity_logreg_v1",
+      "model_name": "Logistic Regression",
+      "version": "1.0.0",
+      "dataset": "jigsaw-toxicity",
+      "updated_at": "2026-04-30",
+      "metrics": {
+        "accuracy": 0.92,
+        "precision": 0.88,
+        "recall": 0.81,
+        "f1": 0.84,
+        "roc_auc": 0.93
+      },
+      "confusion_matrix": {
+        "labels": ["Non-toxic", "Toxic"],
+        "matrix": [[950, 50], [80, 420]]
+      },
+      "roc_curve": {
+        "fpr": [0.0, 0.1, 0.2, 0.4, 1.0],
+        "tpr": [0.0, 0.6, 0.78, 0.9, 1.0]
+      },
+      "pr_curve": {
+        "recall": [0.0, 0.4, 0.6, 0.8, 1.0],
+        "precision": [1.0, 0.9, 0.82, 0.75, 0.6]
+      },
+      "shap_summary": {
+        "top_features": [
+          {"feature": "toxic", "importance": 0.21}
+        ]
+      },
+      "perturbation_importance": [
+        {"feature": "insult", "delta": 0.12}
+      ]
+    },
+    {
+      "model_id": "lasso_logreg_v1",
+      "model_name": "Lasso Logistic Regression",
+      "version": "1.0.0",
+      "dataset": "jigsaw-toxicity",
+      "updated_at": "2026-05-03",
+      "metrics": {
+        "accuracy": 0.9479,
+        "precision": 0.7496,
+        "recall": 0.6899,
+        "f1": 0.7180,
+        "roc_auc": 0.9634,
+        "pr_auc": 0.8063
+      },
+      "confusion_matrix": {
+        "labels": ["Non-toxic", "Toxic"],
+        "matrix": [[28147, 709], [949, 2110]]
+      },
+      "roc_curve": {
+        "fpr": [],
+        "tpr": [],
+        "image_url": ""
+      },
+      "pr_curve": {
+        "recall": [],
+        "precision": [],
+        "image_url": ""
+      },
+      "hyperparams": {
+        "alpha": 0.0001,
+        "learning_rate": 0.1,
+        "val_pr_auc_mean": 0.8010,
+        "val_pr_auc_std": 0.008677354724406902,
+        "val_roc_auc_mean": 0.9616615573955963,
+        "val_macro_f1_mean": 0.7840399729089149
+      }
+    },
+    {
+      "model_id": "random_forest_baseline",
+      "model_name": "Random Forest Baseline",
+      "version": "1.0.0",
+      "dataset": "jigsaw-toxicity",
+      "updated_at": "2026-05-03",
+      "metrics": {
+        "accuracy": 0.9393,
+        "precision": 0.7534,
+        "recall": 0.5476,
+        "f1": 0.6340,
+        "roc_auc": 0.9190,
+        "pr_auc": 0.7295
+      },
+      "confusion_matrix": {
+        "labels": ["Non-toxic", "Toxic"],
+        "matrix": [[28309, 547], [1384, 1675]]
+      },
+      "roc_curve": {
+        "fpr": [],
+        "tpr": [],
+        "image_url": ""
+      },
+      "pr_curve": {
+        "recall": [],
+        "precision": [],
+        "image_url": ""
+      },
+      "hyperparams": {
+        "n_estimators": 200,
+        "max_depth": null,
+        "min_samples_split": 10,
+        "val_pr_auc_mean": 0.7312349313528671,
+        "val_pr_auc_std": 0.008440332318586779,
+        "val_roc_auc_mean": 0.9246922664266108,
+        "val_macro_f1_mean": 0.8097826587459658
+      }
+    }
+  ]
+}

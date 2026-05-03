@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Model Evaluation</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-logo">Σ</span>
+        Wiki Comments Toxicity
+      </div>
+      <div class="top-links">
+        <a href="/dashboard/">Main</a>
+        <a href="/dashboard/nerdy/">Nerdy</a>
+        <a href="/bogosort/">Bogosort</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <aside class="sidebar">
+      <h3>Navigation</h3>
+      <ul>
+        <li><a href="/dashboard/">Main</a></li>
+        <li><a href="/dashboard/nerdy/">Model Evaluation</a></li>
+        <li><a href="/bogosort/">Bogosort</a></li>
+      </ul>
+    </aside>
+
+    <section class="content">
+      <h1>Model Evaluation</h1>
+      <div class="controls">
+        <label for="modelSelect">Model</label>
+        <select id="modelSelect" onchange="loadEvaluation()"></select>
+      </div>
+
+      <h2>Key Metrics</h2>
+      <div class="metric-list" id="metricsGrid"></div>
+
+      <h2>Confusion Matrix</h2>
+      <div id="confusionMatrix"></div>
+
+      <h2>ROC Curve</h2>
+      <div id="rocContainer">
+        <canvas id="rocChart"></canvas>
+      </div>
+
+      <h2>PR Curve</h2>
+      <div id="prContainer">
+        <canvas id="prChart"></canvas>
+      </div>
+
+      <h2>SHAP Top Features</h2>
+      <canvas id="shapChart"></canvas>
+
+      <h2>Perturbation Importance</h2>
+      <canvas id="perturbChart"></canvas>
+
+      <h2>Model Comparison</h2>
+      <canvas id="compareChart"></canvas>
+    </section>
+
+    <aside class="infobox">
+      <h4>Model Info</h4>
+      <table>
+        <tr><td><strong>Dataset</strong></td><td>Jigsaw Toxicity</td></tr>
+        <tr><td><strong>Update</strong></td><td>Per Model Change</td></tr>
+        <tr><td><strong>Audience</strong></td><td>Content Mod</td></tr>
+      </table>
+    </aside>
+  </main>
+
+  <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

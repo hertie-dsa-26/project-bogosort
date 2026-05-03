@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Toxic Words Bogosort Demo</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <span class="brand-logo">Σ</span>
+        Toxicity ML Wiki
+      </div>
+      <div class="top-links">
+        <a href="/dashboard/">Main</a>
+        <a href="/dashboard/nerdy/">Nerdy</a>
+        <a href="/bogosort/">Bogosort</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <aside class="sidebar">
+      <h3>Navigation</h3>
+      <ul>
+        <li><a href="/dashboard/">Main</a></li>
+        <li><a href="/dashboard/nerdy/">Model Evaluation</a></li>
+        <li><a href="/bogosort/">Bogosort Demo</a></li>
+      </ul>
+    </aside>
+
+    <section class="content">
+      <h1>Toxic Words Bogosort Demo</h1>
+
+      {% if show_dist %}
+        <h2>Initial Word Distribution</h2>
+        <img src="{{ dist_url }}" alt="Word Distribution" style="max-width: 100%; border: 1px solid #a2a9b1; background: #fff;">
+
+        <form method="post" style="margin-top: 12px;">
+            <button type="submit" {% if show_spinner %}disabled{% endif %}>Start sorting (Bogosort)</button>
+        </form>
+      {% endif %}
+
+      {% if show_spinner %}
+        <div style="margin-top: 10px; color: #c52;">
+          Animation generation may take a few seconds due to the inefficiency of bogosort—please be patient...
+        </div>
+        <meta http-equiv="refresh" content="2">
+      {% endif %}
+
+      {% if show_gif %}
+        <h2>Sorting Result</h2>
+        <img src="{{ gif_url }}" alt="Bogosort Animation" style="max-width: 100%; border: 1px solid #a2a9b1; background: #fff;">
+        <div style="margin-top: 6px;">
+          {% if sorted %}
+            <span style="color:green;">Successfully sorted after {{ iteration }} iterations!</span>
+          {% else %}
+            <span style="color:crimson;">Max iterations ({{ iteration }}) reached — NOT sorted!</span>
+          {% endif %}
+        </div>
+      {% endif %}
+
+      <p><a href="/dashboard/">Back to Dashboard</a></p>
+    </section>
+
+    <aside class="infobox">
+      <h4>Demo Info</h4>
+      <table>
+        <tr><td><strong>Algorithm</strong></td><td>Bogosort</td></tr>
+        <tr><td><strong>Purpose</strong></td><td>Visualization</td></tr>
+        <tr><td><strong>Dataset</strong></td><td>Jigsaw Toxicity</td></tr>
+      </table>
+    </aside>
+  </main>
+</body>
+</html>
