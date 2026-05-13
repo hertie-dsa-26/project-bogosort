@@ -127,11 +127,14 @@ class SortingService:
         return snapshots
 
     @staticmethod
-    def save_sort_animation(snapshots, filename='static/bogosort_sorting.gif', title='Sorting Animation'):
+    def save_sort_animation(snapshots, filename='static/bogosort_sorting.gif', title='Sorting Animation', stop_flag=None):
         fig, ax = plt.subplots(figsize=(6, 4))
         frames = []
         try:
             for idx, (snap, iter_no) in enumerate(snapshots):
+                if stop_flag and stop_flag.get('stop', False):
+                    plt.close(fig)
+                    return
                 try:
                     ax.clear()
                     tmp_words, tmp_counts = zip(*snap)

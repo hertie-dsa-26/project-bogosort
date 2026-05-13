@@ -1,10 +1,6 @@
 """Fixtures for service layer tests."""
-import json
 import pytest
 import numpy as np
-from unittest.mock import Mock, MagicMock, patch
-from pathlib import Path
-from app.services.session_manager import SessionManager
 
 
 # ===== Sample Data Fixtures =====
@@ -33,14 +29,6 @@ def temp_npy_file(tmp_path, sample_toxic_words):
     data = np.array(sample_toxic_words, dtype=object)
     np.save(npy_path, data)
     return npy_path
-
-
-# ===== Session Fixtures =====
-
-@pytest.fixture
-def session_manager():
-    """Pre-configured SessionManager instance for testing."""
-    return SessionManager(timeout_minutes=10)
 
 
 # ===== Parametrize Fixtures =====

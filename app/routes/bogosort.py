@@ -1,4 +1,4 @@
-﻿"""
+"""
 bogosort.py - interactive sorting-demo routes for the Flask app
 
 This module provides a visual demonstration of Bogosort and MergeSort using
@@ -9,61 +9,57 @@ not block the web server thread. This keeps the UI responsive while long-running
 sorts execute independently.
 
 The module intentionally contrasts Bogosort against MergeSort to demonstrate
-algorithmic complexity differences visually rather than only theoretically. 
-It also reveals a time processing difference. 
+algorithmic complexity differences visually rather than only theoretically.
+It also reveals a time processing difference.
 """
 
-from flask import Blueprint, redirect, render_template, url_for, request, session
+from flask import Blueprint, redirect, render_template, url_for, request, send_file, abort
 import threading
+import os
 import time
-import uuid
 import logging
 from app.services.sorting_service import SortingService
-from app.services.session_manager import SessionManager
 
 logger = logging.getLogger(__name__)
 
 bogosort_demo = Blueprint('bogosort', __name__, url_prefix='/sort-demo')
 
-session_manager = SessionManager(timeout_minutes=30)
-sorting_threads = {}
+_sorting_state = {
+    'state': None,
+    'final_iteration': 0,
+    'sorted': False,
+    'error': None,
+    'stop_flag': {'stop': False},
+    'algorithm': 'bogosort',
+    'seed': '',
+}
+_sorting_thread = None
 
 
-def get_session_id():
-    """Get or create session ID."""
-    if 'bogosort_session_id' not in session:
-        session['bogosort_session_id'] = str(uuid.uuid4())
-        logger.debug(f"Created sorting session: {session['bogosort_session_id']}")
-    return session['bogosort_session_id']
-
-
-def get_sorting_session():
-    """Get the sorting session for the current user."""
-    session_id = get_session_id()
-    return session_manager.get_or_create_session(session_id)
-
-
-def reset_session():
-    """Reset the sorting session."""
-    session_id = get_session_id()
-    if session_id in session_manager.sessions:
-        del session_manager.sessions[session_id]
-    if session_id in sorting_threads:
-        del sorting_threads[session_id]
-    return session_manager.get_or_create_session(session_id)
+def _reset_state():
+    global _sorting_state, _sorting_thread
+    _sorting_state = {
+        'state': None,
+        'final_iteration': 0,
+        'sorted': False,
+        'error': None,
+        'stop_flag': {'stop': False},
+        'algorithm': 'bogosort',
+        'seed': '',
+    }
+    _sorting_thread = None
 
 
 @bogosort_demo.route('/', methods=['GET', 'POST'])
 def bogosort():
-    """Main bogosort/mergesort route."""
     if request.method == 'POST':
         return handle_post()
-    else:
-        return handle_get()
+    return handle_get()
 
 
 def handle_post():
-    """Handle POST request to start sorting."""
+    global _sorting_state, _sorting_thread
+
     algorithm = request.form.get('algorithm', 'bogosort')
     seed_str = request.form.get('seed', '').strip()
     try:
@@ -72,182 +68,142 @@ def handle_post():
         logger.warning(f"Invalid seed value: {seed_str}, using random seed")
         seed = None
 
-    sorting_session = get_sorting_session()
-    session_id = get_session_id()
-
-    # Only start if not already running
-    if sorting_session['state'] != 'running':
+    if _sorting_state['state'] != 'running':
         try:
-            # Load words and save distribution
             words, counts = SortingService.load_shuffled_toxic_words(seed=seed)
-            SortingService.save_distribution_plot(words, counts, 'app/static/word_distribution.png')
+            SortingService.save_distribution_plot(words, counts, '/tmp/word_distribution.png')
 
-            # Mark as running and start thread
-            sorting_session['state'] = 'running'
-            sorting_session['algorithm'] = algorithm
-            sorting_session['seed'] = seed_str
+            stop_flag = {'stop': False}
+            _sorting_state['state'] = 'running'
+            _sorting_state['algorithm'] = algorithm
+            _sorting_state['seed'] = seed_str
+            _sorting_state['stop_flag'] = stop_flag
 
-            if algorithm == 'mergesort':
-                thread = threading.Thread(
-                    target=background_mergesort,
-                    args=(words, counts, 'app/static/mergesort_sorting.gif', sorting_session, seed, session_id),
-                    daemon=True
-                )
-            else:
-                thread = threading.Thread(
-                    target=background_bogosort,
-                    args=(words, counts, 'app/static/bogosort_sorting.gif', sorting_session, seed, session_id),
-                    daemon=True
-                )
-
-            sorting_threads[session_id] = thread
-            thread.start()
+            target = background_mergesort if algorithm == 'mergesort' else background_bogosort
+            gif = '/tmp/mergesort_sorting.gif' if algorithm == 'mergesort' else '/tmp/bogosort_sorting.gif'
+            _sorting_thread = threading.Thread(
+                target=target,
+                args=(words, counts, gif, stop_flag),
+                daemon=True
+            )
+            _sorting_thread.start()
 
         except Exception as e:
-            sorting_session['state'] = 'error'
-            sorting_session['error'] = str(e)
+            _sorting_state['state'] = 'error'
+            _sorting_state['error'] = str(e)
 
-    # Always redirect to GET to show the current state
     return redirect(url_for('bogosort.bogosort'))
 
 
 def handle_get():
-    """Handle GET request to display current state."""
-    sorting_session = get_sorting_session()
-    state = sorting_session.get('state')
-    algorithm = sorting_session.get('algorithm', 'bogosort')
-    seed = sorting_session.get('seed', '')
+    state = _sorting_state['state']
+    algorithm = _sorting_state['algorithm']
+    seed = _sorting_state['seed']
 
-    # Load static file URLs
-    dist_url = url_for('static', filename='word_distribution.png') + f'?v={int(time.time())}'
-    if algorithm == 'mergesort':
-        gif_url = url_for('static', filename='mergesort_sorting.gif') + f'?v={int(time.time())}'
-    else:
-        gif_url = url_for('static', filename='bogosort_sorting.gif') + f'?v={int(time.time())}'
+    dist_url = url_for('bogosort.serve_media', filename='word_distribution.png') + f'?v={int(time.time())}'
+    gif_name = 'mergesort_sorting.gif' if algorithm == 'mergesort' else 'bogosort_sorting.gif'
+    gif_url = url_for('bogosort.serve_media', filename=gif_name) + f'?v={int(time.time())}'
 
-    # Determine what to show based on state
     if state == 'running':
-        # Sorting is in progress - show spinner only
         return render_template(
             'sort-demo.html',
-            dist_url=dist_url,
-            gif_url=gif_url,
-            show_form=False,
-            show_spinner=True,
-            show_gif=False,
-            algorithm=algorithm,
-            seed=seed
+            dist_url=dist_url, gif_url=gif_url,
+            show_form=False, show_spinner=True, show_gif=False,
+            algorithm=algorithm, seed=seed
         )
 
-    elif state == 'done':
-        # Sorting completed - show GIF and results
+    if state == 'done':
         return render_template(
             'sort-demo.html',
-            dist_url=dist_url,
-            gif_url=gif_url,
-            show_form=False,
-            show_spinner=False,
-            show_gif=True,
-            sorted=sorting_session.get('sorted', False),
-            iteration=sorting_session.get('final_iteration', 0),
-            algorithm=algorithm,
-            seed=seed
+            dist_url=dist_url, gif_url=gif_url,
+            show_form=False, show_spinner=False, show_gif=True,
+            sorted=_sorting_state['sorted'],
+            iteration=_sorting_state['final_iteration'],
+            algorithm=algorithm, seed=seed
         )
 
-    elif state == 'error':
-        # Error occurred - show form with error message
+    if state == 'error':
         return render_template(
             'sort-demo.html',
-            dist_url=dist_url,
-            gif_url=gif_url,
-            show_form=True,
-            show_spinner=False,
-            show_gif=False,
-            error=sorting_session.get('error', 'Unknown error'),
-            algorithm='bogosort',
-            seed=''
+            dist_url=dist_url, gif_url=gif_url,
+            show_form=True, show_spinner=False, show_gif=False,
+            error=_sorting_state['error'],
+            algorithm='bogosort', seed=''
         )
 
-    else:
-        # Initial state (None) - show distribution and form
-        try:
-            words, counts = SortingService.load_shuffled_toxic_words(seed=None)
-            SortingService.save_distribution_plot(words, counts, 'app/static/word_distribution.png')
-        except Exception as e:
-            return render_template(
-                'sort-demo.html',
-                dist_url=dist_url,
-                gif_url=gif_url,
-                show_form=True,
-                show_spinner=False,
-                show_gif=False,
-                error=f'Failed to load data: {str(e)}',
-                algorithm='bogosort',
-                seed=''
-            )
-
+    # Initial state — generate the distribution plot
+    try:
+        words, counts = SortingService.load_shuffled_toxic_words(seed=None)
+        SortingService.save_distribution_plot(words, counts, '/tmp/word_distribution.png')
+    except Exception as e:
         return render_template(
             'sort-demo.html',
-            dist_url=dist_url,
-            gif_url=gif_url,
-            show_form=True,
-            show_spinner=False,
-            show_gif=False,
-            algorithm='bogosort',
-            seed=''
+            dist_url=dist_url, gif_url=gif_url,
+            show_form=True, show_spinner=False, show_gif=False,
+            error=f'Failed to load data: {str(e)}',
+            algorithm='bogosort', seed=''
         )
+
+    return render_template(
+        'sort-demo.html',
+        dist_url=dist_url, gif_url=gif_url,
+        show_form=True, show_spinner=False, show_gif=False,
+        algorithm='bogosort', seed=''
+    )
+
+
+@bogosort_demo.route('/media/<filename>')
+def serve_media(filename):
+    allowed = {'word_distribution.png', 'bogosort_sorting.gif', 'mergesort_sorting.gif'}
+    if filename not in allowed:
+        abort(404)
+    path = os.path.join('/tmp', filename)
+    if not os.path.exists(path):
+        abort(404)
+    return send_file(path)
 
 
 @bogosort_demo.route('/stop', methods=['POST'])
 def stop_sorting():
-    """Stop the current sorting operation."""
-    sorting_session = get_sorting_session()
-    sorting_session['stop_flag'] = True
+    _sorting_state['stop_flag']['stop'] = True
     return redirect(url_for('bogosort.bogosort'))
 
 
 @bogosort_demo.route('/reset', methods=['GET'])
 def reset():
-    """Reset to initial state."""
-    reset_session()
+    _reset_state()
     return redirect(url_for('bogosort.bogosort'))
 
 
-def background_bogosort(words, counts, gif_filename, sorting_session, seed=None, session_id=None):
-    """Run bogosort in background."""
+def background_bogosort(words, counts, gif_filename, stop_flag):
     try:
-        stop_flag = {'stop': False}
         snapshots = SortingService.bogosort_snapshots(
-            words, counts, max_iterations=1000, seed=seed, stop_flag=stop_flag
+            words, counts, max_iterations=1000, stop_flag=stop_flag
         )
-        SortingService.save_sort_animation(snapshots, gif_filename, title='Bogosort Animation')
-
-        sorting_session['state'] = 'done'
-        sorting_session['final_iteration'] = snapshots[-1][1]
-        sorting_session['sorted'] = SortingService.is_sorted([x[1] for x in snapshots[-1][0]])
+        SortingService.save_sort_animation(snapshots, gif_filename, title='Bogosort Animation', stop_flag=stop_flag)
+        if stop_flag['stop']:
+            _sorting_state['state'] = None
+            return
+        _sorting_state['state'] = 'done'
+        _sorting_state['final_iteration'] = snapshots[-1][1] if snapshots else 0
+        _sorting_state['sorted'] = SortingService.is_sorted([x[1] for x in snapshots[-1][0]]) if snapshots else False
     except Exception as e:
-        sorting_session['state'] = 'error'
-        sorting_session['error'] = str(e)
-    finally:
-        if session_id in sorting_threads:
-            del sorting_threads[session_id]
+        _sorting_state['state'] = 'error'
+        _sorting_state['error'] = str(e)
 
 
-def background_mergesort(words, counts, gif_filename, sorting_session, seed=None, session_id=None):
-    """Run mergesort in background."""
+def background_mergesort(words, counts, gif_filename, stop_flag):
     try:
-        stop_flag = {'stop': False}
         snapshots = SortingService.mergesort_snapshots(
-            words, counts, seed=seed, stop_flag=stop_flag
+            words, counts, stop_flag=stop_flag
         )
-        SortingService.save_sort_animation(snapshots, gif_filename, title='MergeSort Animation')
-
-        sorting_session['state'] = 'done'
-        sorting_session['final_iteration'] = snapshots[-1][1]
-        sorting_session['sorted'] = SortingService.is_sorted([x[1] for x in snapshots[-1][0]])
+        SortingService.save_sort_animation(snapshots, gif_filename, title='MergeSort Animation', stop_flag=stop_flag)
+        if stop_flag['stop']:
+            _sorting_state['state'] = None
+            return
+        _sorting_state['state'] = 'done'
+        _sorting_state['final_iteration'] = snapshots[-1][1] if snapshots else 0
+        _sorting_state['sorted'] = SortingService.is_sorted([x[1] for x in snapshots[-1][0]]) if snapshots else False
     except Exception as e:
-        sorting_session['state'] = 'error'
-        sorting_session['error'] = str(e)
-    finally:
-        if session_id in sorting_threads:
-            del sorting_threads[session_id]
+        _sorting_state['state'] = 'error'
+        _sorting_state['error'] = str(e)
